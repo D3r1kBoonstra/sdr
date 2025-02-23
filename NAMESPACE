@@ -1,0 +1,4 @@
+S3method(print, sdr)
+S3method(predict, sdr)
+S3method(predict, HDsdr)
+export(sdr, project, dimselect, SCPME_qda, sdrs, HDsdr)
