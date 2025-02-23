@@ -50,6 +50,68 @@ wang_est <- function(X, S = NULL, n = NULL, ...){
   alpha*solve(S + Beta*diag(p))
 }
 
+haff_est <- function(X, S = NULL, n = NULL, ...){
+  tu <- function(S, n, p) {
+    U <- p * det(S) ^ (1 / p) / sum(diag(S))
+    min((4 * (p ^ 2 - 1) / ((n - p - 2) * p ^ 2)), 1) * U ^ (1 / p)
+  }
+
+  ## If X is given
+  if(is.null(S)){
+    ### X as matrix
+    if(!is.matrix(X)) X <- is.matrix(X)
+    ### Cov of X
+    S <- stats::cov(X)
+    ### nrow of X
+    n <- nrow(X)
+  }
+  ## If S is given
+  else {
+    ### S as matrix
+    if(!is.matrix(S)) S <- as.matrix(S)
+    ### Checking if n is given
+    if(is.null(n)) stop("If using S, then n must be given")
+  }
+  p <- ncol(S)
+  S_inv <- solve(S, ...)
+  tu <- tu(S, n, p)
+  ## Computing Haff Shrinkage estimator
+  (1 - tu)*(n - p - 2)*S_inv +
+    ((tu * (n*p - p - 2)) / sum(diag(S)))*diag(1, p)
+}
+
+SCPME_qda <- function(x, grouping, gamma = NULL, lam = NULL, type = "L1", standardize_xbar = FALSE, ...){
+  if(is.null(gamma)) gamma <- rep(1, length(unique(grouping)))
+  x <- as.matrix(x)
+  classes <- unique(grouping)
+  data <- lapply(1:length(classes), function(i) {
+    x[grouping == classes[[i]],]
+  })
+  p <- ncol(x)
+  xbar <- lapply(data, colMeans)
+  S <- lapply(data, cov)
+  out <- vector("list", length(data))
+
+  for (k in seq_along(data)) {
+    if(type == "L1"){
+      A <-  diag(p)
+      B <-  diag(p)
+      C <-  matrix(0, nrow = p, ncol = p)
+    } else if (type == "qda"){
+      standardize <- function(x) {(x - mean(x))/sd(x)}
+      if(standardize_xbar) xbar <- lapply(xbar, standardize)
+      B <- cbind(matrix(xbar[[k]], ncol = 1), gamma[[k]]*diag(p))
+      A <- t(B)
+      C <- matrix(0, nrow = nrow(A), ncol = ncol(B))
+    }
+    if(is.null(lam)) lam <- rep(NULL, length(data))
+    out[[k]] <-  SCPME::shrink(X = data[[k]],
+                               A = A, B = B, C = C,
+                               crit.cv = "loglik", trace = "none", lam = lam[[k]], ...)
+  }
+  out
+}
+
 sdrs <- function(x, grouping, dims, prec.est = NULL, ...){
 
   classes <- unique(grouping)
@@ -61,47 +123,50 @@ sdrs <- function(x, grouping, dims, prec.est = NULL, ...){
   S <- lapply(data, stats::cov)
   xbar <- lapply(data, colMeans)
 
-  if(is.list(prec.est)) S_inv <- prec.est
+  # if(is.list(prec.est)) S_inv <- prec.est
 
   if(is.null(prec.est)) {
     S_inv <- lapply(S, function(x) solve(x, tol = NULL))
   } else if(prec.est == "Haff"){
     S_inv <- lapply(seq_along(S), function(i, ...){
-      Haffshrinkage(S = S[[i]], n = n[[i]], tol = NULL)
+      haff_est(S = S[[i]], n = n[[i]], tol = NULL)
     })
-  } else if(prec.est == "RidgeShrinkage"){
+  } else if(prec.est == "Wang"){
     S_inv <- lapply(seq_along(S), function(i, ...){
       wang_est(S = S[[i]], n = n[[i]], tol = NULL)
     })
-  } else if(prec.est == "BGP16"){
+  } else if(prec.est == "Bodnar"){
     S_inv <- lapply(seq_along(S), function(i, ...){
       p <- ncol(S[[i]])
       HDShOP::InvCovShrinkBGP16(n[[i]], p, diag(p), solve(S[[i]], tol = NULL))$S
     })
-  } else if(prec.est == "SCPME"){
+  } else if(prec.est == "MRY"){
     S_inv <- SCPME_qda(x, grouping, ...)
     lam <- sapply(seq_along(S_inv), function(i) S_inv[[i]]$Tuning[2])
     S_inv <- lapply(seq_along(S_inv), function(i) S_inv[[i]]$Omega)
   } else if(prec.est == "glasso"){
-    # glasso_wrapper <- function(S,n,  lam = NULL, ...){
-    #   out <- vector(mode = "list", length = length(S))
-    #   if(is.null(lam)) lam <- rep(NULL, length(S))
-    #   for (i in seq_along(S)) {
-    #     out[[i]] <- glasso::glasso(s = S[[i]],
-    #                                rho = lam[[i]], nobs = n[[i]])$wi
-    #   }
-    #   out
-    # }
-    # S_inv <- glasso_wrapper(data, ...)
-
-    glasso_out <- lapply(data, function(x){
-      CVglasso::CVglasso(x, trace = "none", crit.cv = "loglik")
-    })
+    glasso_wrapper <- function(data, S, lam = NULL){
+      out <- vector(mode = "list", length = length(S))
+      for (i in seq_along(S)) {
+        S_biased <- S[[i]]*(n[[i]] - 1)/n[[i]]
+        temp <- CVglasso::CVglasso(data[[i]], S = S_biased,
+                                   trace = "none", crit.cv = "loglik", lam = lam[[i]])
+        if(is.null(lam)){
+          min.ratio <- 0.01
+          while(temp$Lambdas[1] == temp$Tuning[[2]] && min.ratio >= 0.000625){
+            min.ratio <- min.ratio/2
+            temp <- CVglasso::CVglasso(x, trace = "none", crit.cv = "loglik", lam.min.ratio = min.ratio)
+          }
+        }
+        out[[i]] <- temp
+      }
+      out
+    }
+    glasso_out <- glasso_wrapper(data, S, ...)
+    S <- lapply(glasso_out, function(x) x$Sigma)
     S_inv <- lapply(glasso_out, function(x) x$Omega)
     lam <- sapply(glasso_out, function(x) x$Tuning[[2]])
   }
-
-
 
   projectedMeanDiffs <- do.call(cbind,
                                 lapply(2:length(xbar), function(i) {
@@ -137,7 +202,7 @@ sdrs2 <- function(x, grouping, dims, prec.est = "glasso", ...){
   xbar <- lapply(data, colMeans)
   xbarbar <- colMeans(x)
 
-  if(is.list(prec.est)) S_inv <- prec.est
+  # if(is.list(prec.est)) S_inv <- prec.est
 
   if(is.null(prec.est)) {
     S_inv <- lapply(S, function(x) solve(x, tol = NULL))
@@ -145,36 +210,20 @@ sdrs2 <- function(x, grouping, dims, prec.est = "glasso", ...){
     S_inv <- lapply(seq_along(S), function(i, ...){
       Haffshrinkage(S = S[[i]], n = n[[i]], tol = NULL)
     })
-  } else if(prec.est == "RidgeShrinkage"){
+  } else if(prec.est == "Wang"){
     S_inv <- lapply(seq_along(S), function(i, ...){
       wang_est(S = S[[i]], n = n[[i]], tol = NULL)
     })
-  } else if(prec.est == "BGP16"){
+  } else if(prec.est == "Bodnar"){
     S_inv <- lapply(seq_along(S), function(i, ...){
       p <- ncol(S[[i]])
       HDShOP::InvCovShrinkBGP16(n[[i]], p, diag(p), solve(S[[i]], tol = NULL))$S
     })
-  } else if(prec.est == "SCPME"){
+  } else if(prec.est == "MRY"){
     S_inv <- SCPME_qda(x, grouping, ...)
     lam <- sapply(seq_along(S_inv), function(i) S_inv[[i]]$Tuning[2])
     S_inv <- lapply(seq_along(S_inv), function(i) S_inv[[i]]$Omega)
   } else if(prec.est == "glasso"){
-    # glasso_wrapper <- function(S,n,  lam = NULL, ...){
-    #   out <- vector(mode = "list", length = length(S))
-    #   if(is.null(lam)) lam <- rep(NULL, length(S))
-    #   for (i in seq_along(S)) {
-    #     out[[i]] <- glasso::glasso(s = S[[i]],
-    #                                rho = lam[[i]], nobs = n[[i]])$wi
-    #   }
-    #   out
-    # }
-    # S_inv <- glasso_wrapper(data, ...)
-
-    # glasso_out <- lapply(data, function(x){
-    #   CVglasso::CVglasso(x, trace = "none", crit.cv = "loglik")
-    # })
-
-
 
     glasso_wrapper <- function(data, S, lam = NULL){
       out <- vector(mode = "list", length = length(S))
@@ -193,29 +242,16 @@ sdrs2 <- function(x, grouping, dims, prec.est = "glasso", ...){
       }
       out
     }
-
     glasso_out <- glasso_wrapper(data, S, ...)
     S <- lapply(glasso_out, function(x) x$Sigma)
     S_inv <- lapply(glasso_out, function(x) x$Omega)
     lam <- sapply(glasso_out, function(x) x$Tuning[[2]])
-
-    # glasso_out <- lapply(seq_along(data), function(i){
-    #   S_biased <- S[[i]]*(n[[i]] - 1)/n[[i]]
-    #   # lams <- eigen(S_biased)$values
-    #   temp <- CVglasso::CVglasso(data[[i]], S = S_biased,
-    #                              trace = "none", crit.cv = "loglik"
-    #                              # ,
-    #                              # lam = sort(lams)
-    #                              )
-
-    # })
 
   }
 
   projectedMeanDiffs <- do.call(cbind,
                                 lapply(1:length(xbar), function(i) {
                                   S_inv[[i]] %*% (xbar[[i]] - xbarbar)
-                                    # S_inv[[1]] %*% xbar[[1]]
                                 }))
 
   Sdiffs <- do.call(cbind,
@@ -229,15 +265,8 @@ sdrs2 <- function(x, grouping, dims, prec.est = "glasso", ...){
 
   Sdiffs <- Sdiff_svd$u[,1:top]
 
-  M <- cbind(normalize(projectedMeanDiffs), Sdiffs)
-  # MMT <- M %*% t(M)
-  # PM_cv <- PMA::PMD.cv(MMT, type = "ordered", sumabsus = seq(1, floor(sqrt(nrow(M))), by = 1), sumabss = NULL)
-  # U <- PMA::PMD(MMT, type = "ordered", sumabsu = PM_cv$bestsumabsu, K = nrow(M), v = PM_cv$v.init, center = FALSE)$v
-  # U <- PMA::SPC(M %*% t(M), K = nrow(M))$v
+  M <- cbind(apply(projectedMeanDiffs, 2, normalize), Sdiffs)
   U <- as.matrix(svd(M, nu = nrow(M))$u)
-  # U <- eigen(M %*% t(M))$vectors
-  # U_r <- as.matrix(svd(M, nu = nrow(M))$u)[,1:ncol(M)]
-  # U <- U_r %*% t(U_r)
 
   #Return Projection Matrix
   out <- list("M" = M, "ProjectionMatrix" = t(U[,dims]))
@@ -267,55 +296,17 @@ lik <- function(d){
   list("lik" = out, "max" = which.max(out))
 }
 
-normalize <- function(x) {x / sqrt(sum(x^2))}
-# dot <- function(x, y) {
-#   stopifnot(length(x) == length(y))
-#   sum(Conj(y) * x)
-# }
-#
-# norm <- function(x) sqrt(dot(x, x))
-#
-# is.zero <- function(x) norm(x) < sqrt(.Machine$double.eps)
-# normalize <- function(x) {
-#   if (is.zero(x)) {
-#     stop("Input `x` is numerically equivalent to the zero vector.", call. = FALSE)
-#   } else {
-#     x / norm(x)
-#   }
-# }
 
-# SYS2 <- function(x, grouping, dims, ...){
-#   classes <- unique(grouping)
-#   data <- lapply(1:length(classes), function(i){
-#     x[grouping == classes[[i]], ]
-#   })
-#
-#   n <- lapply(data, nrow)
-#   S <- lapply(data, stats::cov)
-#   xbar <- lapply(data, colMeans)
-#
-#   # St_inv <- lapply(seq_along(S), function(i, ...){
-#   #   Haffshrinkage(S = S[[i]], n = n[[i]], tol = NULL)
-#   # })
-#
-#   St_inv <- lapply(seq_along(S), function(i, ...){
-#     RidgeShrinkage(S = S[[i]], n = n[[i]], tol = NULL)
-#   })
-#
-#   projectedMeanDiffs <- do.call(cbind,
-#                                 lapply(2:length(xbar), function(i) {
-#                                   St_inv[[i]] %*% xbar[[i]] -
-#                                     St_inv[[1]] %*% xbar[[1]]
-#                                 }))
-#
-#   Sdiffs <- do.call(cbind,
-#                     lapply(2:length(S), function(i) {
-#                       S[[i]] - S[[1]]
-#                     }))
-#
-#   M <- cbind(projectedMeanDiffs, Sdiffs)
-#   U <- as.matrix(svd(M)$u)
-#   #Return Projection Matrix
-#   t(U[,dims])
-# }
-
+normalize <- function(x) {
+  dot <- function(x, y) {
+    stopifnot(length(x) == length(y))
+    sum(Conj(y) * x)
+  }
+  norm <- function(x) sqrt(dot(x, x))
+  is.zero <- function(x) norm(x) < sqrt(.Machine$double.eps)
+  if (is.zero(x)) {
+    stop("Input `x` is numerically equivalent to the zero vector.", call. = FALSE)
+  } else {
+    x / norm(x)
+  }
+}

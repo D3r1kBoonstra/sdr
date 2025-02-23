@@ -38,9 +38,6 @@ sdr.fit <- function(x, grouping, method = "SDRS", dims = NULL, dimselect = NULL,
   if(method == "SDRS2"){
     out <- sdrs2(x, grouping, dims, ...)
   }
-  if(method == "SY"){
-    out <- SY(x, grouping, dims, ...)
-  }
   if(method == "LD"){
     out <- LD(x, grouping, dims, ...)
   }

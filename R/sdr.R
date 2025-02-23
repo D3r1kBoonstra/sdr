@@ -1,24 +1,5 @@
 sdr <- function(x, grouping, method = "SDRS", dims = NULL, dimselect = NULL, cv.folds = NULL, ...){
 
-  # #Formula
-  # if(!missing(formula)){
-  #   mf <- match.call(expand.dots = FALSE)
-  #   m <- match(c("formula", "data", "subset", "na.action"), names(mf), 0L)
-  #   mf <- mf[c(1L, m)]
-  #   mf$drop.unused.levels <- TRUE
-  #   mf[[1L]] <- quote(stats::model.frame)
-  #   mf <- eval(mf, parent.frame())
-  #   Terms <- attr(mf, "terms")
-  #   grouping <- model.response(mf)
-  #   x <- model.matrix(Terms, mf)
-  #   xvars <- as.character(attr(Terms, "variables"))[-1L]
-  #   if ((yvar <- attr(Terms, "response")) > 0)
-  #     xvars <- xvars[-yvar]
-  #   xint <- match("(Intercept)", colnames(x), nomatch = 0L)
-  #   if (xint > 0)
-  #     x <- x[, -xint, drop = FALSE]
-  # }
-
   if(!is.matrix(x)) x <- as.matrix(x)
   if(!is.factor(grouping)) grouping <- as.factor(grouping)
   grouping <- droplevels(grouping)
@@ -28,8 +9,7 @@ sdr <- function(x, grouping, method = "SDRS", dims = NULL, dimselect = NULL, cv.
   out <- sdr.fit(x = x, grouping = grouping, method = method, dims = dims, dimselect = dimselect, ...)
 
   if(!is.null(cv.folds)){
-    # if(!is.null(seed)){set.seed(seed)}
-    df <- suppressMessages(dplyr::bind_cols("class" = grouping, x))
+    df <- cbind("class" = grouping, as.data.frame(x))
     splits <- rsample::vfold_cv(df, strata = class, v = cv.folds)$splits
     train <- lapply(splits, rsample::training)
     test <- lapply(splits, rsample::testing)
