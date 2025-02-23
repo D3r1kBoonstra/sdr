@@ -1,11 +1,18 @@
 Package: sdr
 Type: Package
-Title: What the Package Does (Title Case)
+Title: sdr
 Version: 0.1.0
-Author: Derik Boonstra
-Maintainer: The package maintainer <yourself@somewhere.net>
-Description: More about what it does (maybe more than one line)
-    Use four spaces when indenting paragraphs within the Description.
-License: What license is it under?
+Authors@R: person("Derik", "Boonstra", email = "derik.todd@gmail.com", role = c("aut", "cre"))
+Description: A brief description of what your package does.
+License: MIT + file LICENSE
+Imports:
+    PMA,
+    rsample,
+    MASS,
+    HDShOP,
+    SCPME,
+    CVglasso
+Remotes:
+    MGallow/shrink
 Encoding: UTF-8
 LazyData: true

@@ -1,4 +1,11 @@
+importFrom(PMA, SPC.cv, SPC)
+importFrom(rsample, vfold_cv, training, testing)
+importFrom(MASS, qda, lda)
+importFrom(SCPME, shrink)
+importFrom(HDShOP, InvCovShrinkBGP16)
+importFrom(CVglasso, CVglasso)
 S3method(print, sdr)
 S3method(predict, sdr)
 S3method(predict, HDsdr)
 export(sdr, project, dimselect, SCPME_qda, sdrs, HDsdr)
+
