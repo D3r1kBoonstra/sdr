@@ -435,7 +435,6 @@ sdrs2 <- function(x, slices, dims, prec.est = "glasso", ...){
   }
   out
 }
-
 sdrs3 <- function(x, slices, dims, prec.est = "glasso", ...){
 
   classes <- unique(slices)
