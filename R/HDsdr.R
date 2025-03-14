@@ -1,4 +1,4 @@
-HDsdr <- function(x, grouping, method = "SDRS2", dims = NULL, dim.order = NULL, cv.folds = NULL, orth = TRUE, spca.prop.var = TRUE, center = TRUE, sumabsv = NULL, npca = NULL, ...){
+HDsdr <- function(x, grouping, method = "SDRS2", dims = NULL, dimselect = NULL, cv.folds = NULL, orth = TRUE, spca.prop.var = TRUE, center = TRUE, sumabsv = NULL, npca = NULL, ...){
 
   if(!is.matrix(x)) x <- as.matrix(x)
   if(!is.factor(grouping)) grouping <- as.factor(grouping)
@@ -37,7 +37,7 @@ HDsdr <- function(x, grouping, method = "SDRS2", dims = NULL, dim.order = NULL, 
 
   x_spca <- PMA::SPC(x, sumabsv = sumabsv, orth = orth, K  = npca, trace = FALSE, compute.pve = spca.prop.var, center = center)
   center <- ifelse(is.null(x_spca$meanx), 0, x_spca$meanx)
-  out <- sdr((x - center) %*% x_spca$v, grouping, method, dims, dim.order, cv.folds, ... = ...)
+  out <- sdr((x - center) %*% x_spca$v, grouping, method, dims, dimselect, cv.folds, ... = ...)
 
 
   class(out) <- c("HDsdr")
