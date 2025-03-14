@@ -523,8 +523,8 @@ sdrs3 <- function(x, slices, dims, prec.est = "glasso", ...){
                                 }))
 
   Sdiffs <- do.call(cbind,
-                    lapply(2:length(S), function(i) {
-                      S[[i]] - S[[1]]
+                    lapply(1:length(S), function(i) {
+                      S[[i]] - S
                     }))
 
   Sdiff_svd <- svd(Sdiffs)
