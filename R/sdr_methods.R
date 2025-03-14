@@ -451,6 +451,7 @@ sdrs3 <- function(x, slices, dims, prec.est = "glasso", ...){
   # S_common <- cov(x)
   xbar <- lapply(data, function(x)as.matrix(colMeans(x)))
   xbarbar <- as.matrix(colMeans(x))
+  S_x <- cov(x)
 
   # if(is.list(prec.est)) S_inv <- prec.est
 
@@ -524,7 +525,7 @@ sdrs3 <- function(x, slices, dims, prec.est = "glasso", ...){
 
   Sdiffs <- do.call(cbind,
                     lapply(1:length(S), function(i) {
-                      S[[i]] - S
+                      S[[i]] - S_x
                     }))
 
   Sdiff_svd <- svd(Sdiffs)
