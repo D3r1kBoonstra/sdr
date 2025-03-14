@@ -435,6 +435,7 @@ sdrs2 <- function(x, slices, dims, prec.est = "glasso", ...){
   }
   out
 }
+
 sdrs3 <- function(x, slices, dims, prec.est = "glasso", ...){
 
   classes <- unique(slices)
@@ -451,7 +452,6 @@ sdrs3 <- function(x, slices, dims, prec.est = "glasso", ...){
   # S_common <- cov(x)
   xbar <- lapply(data, function(x)as.matrix(colMeans(x)))
   xbarbar <- as.matrix(colMeans(x))
-  S_x <- cov(x)
 
   # if(is.list(prec.est)) S_inv <- prec.est
 
@@ -519,13 +519,13 @@ sdrs3 <- function(x, slices, dims, prec.est = "glasso", ...){
   # S <- lapply(S_inv, function(x) solve(x))
 
   projectedMeanDiffs <- Reduce(`+`,
-                                lapply(1:length(xbar), function(i) {
-                                  prior[[i]] * (xbar[[i]] - xbarbar) %*% t(xbar[[i]] - xbarbar)
-                                }))
+                               lapply(1:length(xbar), function(i) {
+                                 prior[[i]] * (xbar[[i]] - xbarbar) %*% t(xbar[[i]] - xbarbar)
+                               }))
 
   Sdiffs <- do.call(cbind,
-                    lapply(1:length(S), function(i) {
-                      S[[i]] - S_x
+                    lapply(2:length(S), function(i) {
+                      S[[i]] - S[[1]]
                     }))
 
   Sdiff_svd <- svd(Sdiffs)
