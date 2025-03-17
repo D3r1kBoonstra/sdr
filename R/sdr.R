@@ -16,9 +16,9 @@ sdr <- function(x, y, method = "sdrs", ytype = "categorical", dims = NULL, dim.o
     test <- lapply(splits, rsample::testing)
     cv.errs <- matrix(nrow = cv.folds, ncol = length(out$dims))
     for(i in 1:cv.folds){
-      fit <- sdr.fit(x = train[[i]][,-1], slices = train[[i]]$class, method = method, dims = out$dims, dim.order = NULL, lam = out$lam, ...)
+      fit <- sdr.fit(x = as.matrix(train[[i]][,-1]), slices = train[[i]]$class, method = method, dims = out$dims, dim.order = NULL, lam = out$lam, ...)
       cv.errs[i,] <- sapply(1:length(out$dims), function(j){
-        pred <- predict(fit, newdata = test[[i]][,-1], dims = 1:j)$class
+        pred <- predict(fit, newdata = test[[i]][,-1], dims = out$dims[1:j], ...)$class
         mean(pred != test[[i]]$class)
       })
     }
@@ -38,9 +38,9 @@ sdr <- function(x, y, method = "sdrs", ytype = "categorical", dims = NULL, dim.o
   #### Model output
   out$call <- match.call()
   out$method <- method
-  out$dim.order.method <- dim.order
+  out$dim_order_method <- dim.order
   # out$dims <- if(!is.null(dimselect)) out$dims
-  out$slices <- slices
+  # out$slices <- slices
   ## Return
   out
 }

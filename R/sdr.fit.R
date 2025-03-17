@@ -24,25 +24,21 @@ sdr.fit <- function(x, slices, method = "sdrs", dims = NULL, dim.order = NULL, .
   if(method == "dr"){
     out <- dr(x, slices, dims, ...)
   }
-
-  if(!is.null(dim.order)) {
-    dim_order_out <- dim_order(x, slices, out$ProjectionMatrix,
-                               method = dim.order, ...)
-    out$ProjectionMatrix <- dim_order_out$ProjectionMatrix
-  }
-
+  out$ProjectionMatrix <- as.matrix(out$ProjectionMatrix)
   class(out) <- c("sdr")
 
   out$ProjectedData <- x %*% out$ProjectionMatrix
   out$slices <- slices
   out$dims <- dims
 
-  # if(fitted.class){
-  #   out$fitted.class <- predict(MASS::qda(out$ProjectedData, slices), ...)
-  # }
-  if(!is.null(dim.order)){
+  if(!is.null(dim.order)) {
+    dim_order_out <- dim_order(object = out, method = dim.order, ...)
+    out$ProjectionMatrix <- dim_order_out$ProjectionMatrix
     out$dims <- dim_order_out$dims
+    out$ProjectedData <- dim_order_out$ProjectedData
+    out$dim_criteria <- dim_order_out$dim_criteria
   }
+
   ## Return
   out
 }

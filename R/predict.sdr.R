@@ -1,6 +1,6 @@
 #### Predict function for class "hldr" ####
 predict.sdr <- function(object, newdata = NULL, dims = NULL, type = "model", model = "qda", ...){
-  if(is.null(dims)) dims <- 1:nrow(object$ProjectionMatrix)
+  if(is.null(dims)) dims <- 1:ncol(object$ProjectionMatrix)
   ProjectionMatrix <- as.matrix(object$ProjectionMatrix[,dims])
 
   if(type == "project") {

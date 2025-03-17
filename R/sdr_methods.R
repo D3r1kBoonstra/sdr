@@ -5,7 +5,9 @@ sir <- function(x, slices, dims = 1:ncol(x), priors = NULL, ...){
 
   xbarbar <- as.matrix(colMeans(x))
   N <- S <- cov(x)
+  S_inv_sqrt <- mat_power(S, -0.50)
   xbar <- lapply(data_list, function(x) as.matrix(colMeans(x)))
+
 
   M <- lapply(seq_along(xbar), function(i){
     diff <- xbar[[i]] - xbarbar
@@ -13,8 +15,9 @@ sir <- function(x, slices, dims = 1:ncol(x), priors = NULL, ...){
   }) |>
     Reduce(`+`, x = _)
 
-  beta <- geigen::geigen(M, N) |>
-    with(vectors[,ncol(vectors):1])
+  beta <- S_inv_sqrt %*% eigen(S_inv_sqrt %*% M %*% S_inv_sqrt)$vectors
+  # beta <- geigen::geigen(M, N) |>
+  #   with(vectors[,ncol(vectors):1])
 
   list("ProjectionMatrix" = beta[,dims],"M" = M, "N" = N)
 }
@@ -38,8 +41,9 @@ save <- function(x, slices, dims = 1:ncol(x), priors = NULL, ...){
 
   M <- S_sqrt %*% E %*% S_sqrt
 
-  beta <- geigen::geigen(M, N) |>
-    with(vectors[,ncol(vectors):1])
+  beta <- S_inv_sqrt %*% eigen(S_inv_sqrt %*% M %*% S_inv_sqrt)$vectors
+  # beta <- geigen::geigen(M, N) |>
+  #   with(vectors[,ncol(vectors):1])
 
   ## Return
   list("ProjectionMatrix" = beta[,dims], "M" = M, "N" = N)
@@ -71,39 +75,12 @@ dr <- function(x, slices, dims = 1:ncol(x), priors = NULL, ...){
   E <- 2*M1 + 2*mat_power(M2, 2) + 2*sum(diag(M2))*M2 - 2*diag(p)
   M <- S_sqrt %*% E %*% S_sqrt
 
-  beta <- geigen::geigen(M, N) |>
-    with(vectors[,ncol(vectors):1])
-
-  # beta <- eigen(solve(N) %*% M)$vectors
+  beta <- S_inv_sqrt %*% eigen(S_inv_sqrt %*% M %*% S_inv_sqrt)$vectors
+  # beta <- geigen::geigen(M, N) |>
+  #   with(vectors[,ncol(vectors):1])
 
   list("ProjectionMatrix" = beta[,dims],"M" = M, "N" = N)
 
-}
-
-save <- function(x, slices, dims = 1:ncol(x), priors = NULL, ...){
-
-  p <- ncol(x)
-  N <- S_x <- cov(x)
-  S_inv_sqrt <- mat_power(S_x, -.5)
-  S_sqrt <- mat_power(S_x, .5)
-  z <- scale(x, center = TRUE, scale = FALSE) %*% S_inv_sqrt
-
-  data_list <- data_list_fn(z, slices)
-  if(is.null(priors)) priors <- priors_fn(data_list = data_list)
-
-  S_zy <- lapply(data_list, cov)
-  E <- lapply(seq_along(S_zy), function(i){
-    priors[[i]]* mat_power(diag(p) - S_zy[[i]], 2)
-  }) |>
-    Reduce(`+`, x = _)
-
-  M <- S_sqrt %*% E %*% S_sqrt
-
-  beta <- geigen::geigen(M, N) |>
-    with(vectors[,ncol(vectors):1])
-
-  ## Return
-  list("ProjectionMatrix" = beta[,dims], "M" = M, "N" = N)
 }
 
 sdrs <- function(x, slices, dims, prec.est = "glasso", ...){
@@ -194,7 +171,7 @@ sdrs <- function(x, slices, dims, prec.est = "glasso", ...){
   M <- cbind(projectedMeanDiffs, Sdiffs)
   U <- as.matrix(svd(M)$u)
   #Return Projection Matrix
-  out <- list("M" = M, "ProjectionMatrix" = U[,dims])
+  out <- list("ProjectionMatrix" = U[,dims], "M" = M, "N" = diag(nrow(M)))
 
   if(!is.null(prec.est)){
     if(prec.est == "SCPME" | prec.est == "glasso") out$lam <-  lam
@@ -311,7 +288,7 @@ sdrs2 <- function(x, slices, dims, prec.est = "glasso", ...){
   U <- as.matrix(svd(M, nu = nrow(M))$u)
 
   #Return Projection Matrix
-  out <- list("M" = M, "ProjectionMatrix" = U[,dims])
+  out <- list("ProjectionMatrix" = U[,dims], "M" = M, "N" = diag(nrow(M)))
 
   if(!is.null(prec.est)){
     if(prec.est == "SCPME" | prec.est == "glasso") out$lam <-  lam
@@ -428,7 +405,7 @@ sdrs2 <- function(x, slices, dims, prec.est = "glasso", ...){
   U <- as.matrix(svd(M, nu = nrow(M))$u)
 
   #Return Projection Matrix
-  out <- list("M" = M, "ProjectionMatrix" = U[,dims])
+  out <- list("ProjectionMatrix" = U[,dims], "M" = M, "N" = diag(nrow(M)))
 
   if(!is.null(prec.est)){
     if(prec.est == "SCPME" | prec.est == "glasso") out$lam <-  lam
@@ -517,9 +494,9 @@ sdrs3 <- function(x, slices, dims, prec.est = "glasso", ...){
 
   # S <- lapply(S_inv, function(x) solve(x))
 
-  projectedMeanDiffs <- Reduce(`+`,
+  projectedMeanDiffs <- cbind(`+`,
                                lapply(1:length(xbar), function(i) {
-                                 prior[[i]] * (xbar[[i]] - xbarbar) %*% t(xbar[[i]] - xbarbar)
+                                 (xbar[[i]] - xbarbar)
                                }))
 
   Sdiffs <- do.call(cbind,
@@ -544,7 +521,7 @@ sdrs3 <- function(x, slices, dims, prec.est = "glasso", ...){
   U <- as.matrix(svd(M, nu = nrow(M))$u)
 
   #Return Projection Matrix
-  out <- list("M" = M, "ProjectionMatrix" = U[,dims])
+  out <- list("ProjectionMatrix" = U[,dims], "M" = M, "N" = diag(nrow(M)))
 
   # if(!is.null(prec.est)){
   #   if(prec.est == "SCPME" | prec.est == "glasso") out$lam <-  lam
