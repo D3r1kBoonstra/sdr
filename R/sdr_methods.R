@@ -5,7 +5,7 @@ sir <- function(x, slices, dims = 1:ncol(x), priors = NULL, ...){
 
   xbarbar <- as.matrix(colMeans(x))
   N <- S <- cov(x)
-  S_inv_sqrt <- mat_power(S, -0.50)
+  # S_inv_sqrt <- mat_power(S, -0.50)
   xbar <- lapply(data_list, function(x) as.matrix(colMeans(x)))
 
 
@@ -15,9 +15,9 @@ sir <- function(x, slices, dims = 1:ncol(x), priors = NULL, ...){
   }) |>
     Reduce(`+`, x = _)
 
-  beta <- S_inv_sqrt %*% eigen(S_inv_sqrt %*% M %*% S_inv_sqrt)$vectors
-  # beta <- geigen::geigen(M, N) |>
-  #   with(vectors[,ncol(vectors):1])
+  # beta <- S_inv_sqrt %*% eigen(S_inv_sqrt %*% M %*% S_inv_sqrt)$vectors
+  beta <- geigen::geigen(M, N) |>
+    with(vectors[,ncol(vectors):1])
 
   list("ProjectionMatrix" = beta[,dims],"M" = M, "N" = N)
 }
@@ -41,9 +41,9 @@ save <- function(x, slices, dims = 1:ncol(x), priors = NULL, ...){
 
   M <- S_sqrt %*% E %*% S_sqrt
 
-  beta <- S_inv_sqrt %*% eigen(S_inv_sqrt %*% M %*% S_inv_sqrt)$vectors
-  # beta <- geigen::geigen(M, N) |>
-  #   with(vectors[,ncol(vectors):1])
+  # beta <- S_inv_sqrt %*% eigen(S_inv_sqrt %*% M %*% S_inv_sqrt)$vectors
+  beta <- geigen::geigen(M, N) |>
+    with(vectors[,ncol(vectors):1])
 
   ## Return
   list("ProjectionMatrix" = beta[,dims], "M" = M, "N" = N)
@@ -75,9 +75,9 @@ dr <- function(x, slices, dims = 1:ncol(x), priors = NULL, ...){
   E <- 2*M1 + 2*mat_power(M2, 2) + 2*sum(diag(M2))*M2 - 2*diag(p)
   M <- S_sqrt %*% E %*% S_sqrt
 
-  beta <- S_inv_sqrt %*% eigen(S_inv_sqrt %*% M %*% S_inv_sqrt)$vectors
-  # beta <- geigen::geigen(M, N) |>
-  #   with(vectors[,ncol(vectors):1])
+  # beta <- S_inv_sqrt %*% eigen(S_inv_sqrt %*% M %*% S_inv_sqrt)$vectors
+  beta <- geigen::geigen(M, N) |>
+    with(vectors[,ncol(vectors):1])
 
   list("ProjectionMatrix" = beta[,dims],"M" = M, "N" = N)
 

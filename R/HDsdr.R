@@ -1,8 +1,11 @@
-HDsdr <- function(x, grouping, method = "SDRS2", dims = NULL, dim.order = NULL, cv.folds = NULL, orth = TRUE, spca.prop.var = TRUE, center = TRUE, sumabsv = NULL, npca = NULL, ...){
+HDsdr <- function(x, y, method = "sdrs3", ytype = "categorical", dims = NULL, dim.order = NULL, cv.folds = NULL, orth = TRUE, spca.prop.var = TRUE, center = TRUE, sumabsv = NULL, npca = NULL, ...){
 
   if(!is.matrix(x)) x <- as.matrix(x)
-  if(!is.factor(grouping)) grouping <- as.factor(grouping)
-  grouping <- droplevels(grouping)
+  if(!is.factor(y)){
+    slices <- droplevels(as.factor(y))
+  } else {
+    slices <- droplevels(y)
+  }
   if(is.null(sumabsv)){
     p <- ncol(x)
     max_sumv <- floor(sqrt(p))
@@ -20,9 +23,9 @@ HDsdr <- function(x, grouping, method = "SDRS2", dims = NULL, dim.order = NULL, 
     sumabsv <- PMA::SPC.cv(x, sumabsvs = sum_seqv, orth = orth, center = center, trace = FALSE)$bestsumabsv
   }
   if(is.null(npca)){
-    classes <- unique(grouping)
+    classes <- unique(slices)
     ni <- sapply(1:length(classes), function(i){
-      nrow(x[grouping == classes[[i]], ])
+      nrow(x[slices == classes[[i]], ])
     })
     npca <- min(ni) - 1
     if(!is.null(cv.folds)){
@@ -37,7 +40,7 @@ HDsdr <- function(x, grouping, method = "SDRS2", dims = NULL, dim.order = NULL, 
 
   x_spca <- PMA::SPC(x, sumabsv = sumabsv, orth = orth, K  = npca, trace = FALSE, compute.pve = spca.prop.var, center = center)
   center <- ifelse(is.null(x_spca$meanx), 0, x_spca$meanx)
-  out <- sdr((x - center) %*% x_spca$v, grouping, method, dims, dim.order, cv.folds, ... = ...)
+  out <- sdr(x = (x - center) %*% x_spca$v, y = slices, method = method, ytype = ytype, dims = dims, dim.order = dim.order, cv.folds = cv.folds, ... = ...)
 
 
   class(out) <- c("HDsdr")
