@@ -494,7 +494,7 @@ sdrs3 <- function(x, slices, dims, prec.est = "glasso", ...){
 
   # S <- lapply(S_inv, function(x) solve(x))
 
-  projectedMeanDiffs <- cbind(`+`,
+  projectedMeanDiffs <- do.call(cbind,
                                lapply(1:length(xbar), function(i) {
                                  (xbar[[i]] - xbarbar)
                                }))
