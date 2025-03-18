@@ -517,7 +517,7 @@ sdrs3 <- function(x, slices, dims, prec.est = "glasso", ...){
 
   Sdiffs <- Sdiff_svd$u[,1:top]
 
-  M <- cbind(projectedMeanDiffs, Sdiffs)
+  M <- cbind(apply(projectedMeanDiffs, 2, normalize), Sdiffs)
   U <- as.matrix(svd(M, nu = nrow(M))$u)
 
   #Return Projection Matrix
