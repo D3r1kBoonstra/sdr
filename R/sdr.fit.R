@@ -1,44 +1,33 @@
 #### hldr.fit function ####
-sdr.fit <- function(x, slices, method = "sdrs", dims = NULL, dim.order = NULL, ...){
-
+sdr.fit <- function(method, ...){
 
   method <- tolower(method)
-  if(method == "sdrs"){
-    out <- sdrs(x, slices, dims, ...)
-  }
-  if(method == "sdrs2"){
-    out <- sdrs2(x, slices, dims, ...)
-  }
-  if(method == "sdrs3"){
-    out <- sdrs3(x, slices, dims, ...)
-  }
-  # if(method == "ld"){
-  #   out <- LD(x, slices, dims, ...)
+  class(method) <- method
+  UseMethod("sdr.fit", method)
+
+
+  # out$ProjectionMatrix <- as.matrix(out$ProjectionMatrix[,dims])
+  # out$ProjectedData <- x %*% out$ProjectionMatrix
+  # out$slices <- slices
+  # class(out) <- c("sdr")
+
+  # if(!is.null(dim.order)) {
+  #   dim_order_out <- dim_order(object = out, method = dim.order, ndims = ndims, ...)
+  #   out$ProjectionMatrix <- dim_order_out$ProjectionMatrix
+  #   out$dims <- dim_order_out$dims
+  #   out$eigvalues <- out$eigvalues[dims]
+  #   out$ProjectedData <- dim_order_out$ProjectedData
+  #   out$dim_criteria <- dim_order_out$dim_criteria
+  # } else{
+  #   dims <- dims[1:ndims]
+  #   out$eigvalues <- out$eigvalues[dims]
+  #   out$dims <- dims
+  #   out$ProjectionMatrix <- as.matrix(out$ProjectionMatrix[,dims])
+  #   out$ProjectedData <- out$ProjectedData[,dims]
   # }
-  if(method == "sir"){
-    out <- sir(x, slices, dims, ...)
-  }
-  if(method == "save"){
-    out <- save(x, slices, dims, ...)
-  }
-  if(method == "dr"){
-    out <- dr(x, slices, dims, ...)
-  }
-  out$ProjectionMatrix <- as.matrix(out$ProjectionMatrix)
-  class(out) <- c("sdr")
 
-  out$ProjectedData <- x %*% out$ProjectionMatrix
-  out$slices <- slices
-  out$dims <- dims
-
-  if(!is.null(dim.order)) {
-    dim_order_out <- dim_order(object = out, method = dim.order, ...)
-    out$ProjectionMatrix <- dim_order_out$ProjectionMatrix
-    out$dims <- dim_order_out$dims
-    out$ProjectedData <- dim_order_out$ProjectedData
-    out$dim_criteria <- dim_order_out$dim_criteria
-  }
+  # out$ProjectionMatrix <- as.matrix(out$ProjectionMatrix[,dims])
 
   ## Return
-  out
+  # out
 }

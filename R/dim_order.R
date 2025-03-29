@@ -1,5 +1,5 @@
-qdap <- function(x, y, prior){
-  vecs <- list(x, y)
+qdap <- function(x1, x2, priors = NULL, ...){
+  vecs <- list(x1, x2)
   s2 <- sapply(vecs, var)
   ords <- sort(s2, decreasing = TRUE, index.return = TRUE)$ix
   # ords <- order(unlist(s2), decreasing = TRUE)
@@ -7,7 +7,12 @@ qdap <- function(x, y, prior){
   # s2 <- as.list(unlist(s2)[ords])
   # s <- lapply(s2, sqrt)
   s <- sqrt(s2)
-  prior <- prior[ords]
+  if(is.null(priors)){
+    n <- sapply(vecs, length)
+    N <- Reduce(`+`, n)
+    priors <- lapply(n, function(x) x/N)
+  }
+  priors <- priors[ords]
   mdiff <- mean(vecs[[ords[1]]]) - mean(vecs[[ords[2]]])
   s2diff <- Reduce(`-`, s2)
   sqrt_delt <- sqrt((-1*mdiff)^2 + s2diff*log(s2[[1]]/s2[[2]]))
@@ -15,11 +20,11 @@ qdap <- function(x, y, prior){
   smdiff <- lapply(s, function(x) x*mdiff)
   # Return
   c("qdap" =
-      prior[[1]] +
-      prior[[1]]*pnorm((smdiff[[2]] - sdelt[[1]])/s2diff) -
-      prior[[1]]*pnorm((smdiff[[2]] + sdelt[[1]])/s2diff) +
-      prior[[2]]*pnorm((smdiff[[1]] + sdelt[[2]])/s2diff) -
-      prior[[2]]*pnorm((smdiff[[1]] - sdelt[[2]])/s2diff)
+      priors[[1]] +
+      priors[[1]]*pnorm((smdiff[[2]] - sdelt[[1]])/s2diff) -
+      priors[[1]]*pnorm((smdiff[[2]] + sdelt[[1]])/s2diff) +
+      priors[[2]]*pnorm((smdiff[[1]] + sdelt[[2]])/s2diff) -
+      priors[[2]]*pnorm((smdiff[[1]] - sdelt[[2]])/s2diff)
     )
 
 }
@@ -73,7 +78,7 @@ qdap <- function(x, y, prior){
 # }
 
 dim_order <- function(x, grouping, ProjectionMatrix, method = "t",
-                      ndims = NULL, ProjectedData = NULL, prior = NULL, nboot = NULL, object = NULL, ...){
+                      ndims = NULL, ProjectedData = NULL, nboot = NULL, object = NULL, ...){
 
   method <- tolower(method)
   if(!(method %in% c("t", "qdap", "f"))) stop(paste0("Unrecognized method = ", method, '. dim_order only supports methods "T", "QDAP", or "F".'))
@@ -104,34 +109,22 @@ dim_order <- function(x, grouping, ProjectionMatrix, method = "t",
   if(is.null(ndims)) ndims <- ncol(ProjectedData)
 
   if(!is.null(nboot)){
+    if(is.null(object)){
+      boot_crits <- do.call(rbind, lapply(seq_len(nboot), function(i){
+        idx <- sample(1:nrow(ProjectedData), nrow(ProjectedData), replace = TRUE)
+        dim_order.fit(ProjectedData[idx, ], grouping[idx], method, ...)
+      }))
+      crit <- colMeans(boot_crits)
+    } else {
+      boot_crits <- do.call(rbind, lapply(seq_len(nboot), function(i){
+        n <- nrow(object$x)
+        idx <- sample(1:n, n, replace = TRUE)
+        temp <- sdr.fit(object$method, object$x, object$y, object$ytype, object$dims, ...)
+        dim_order.fit(temp$ProjectedData[idx, ], temp$slices[idx], method, ...)
+      }))
+      crit <- colMeans(boot_crits)
+    }
 
-    # df <- cbind("class" = grouping, ProjectedData) |> as.data.frame()
-    # splits <- (df |> rsample::vfold_cv(strata = class, v = folds))$splits
-    # train <- lapply(splits, rsample::training)
-    # test <- lapply(splits, rsample::testing)
-
-    crit <- lapply(seq_len(nboot), function(i){
-      # train <- train[[i]]
-      # proj_list <- train |>
-      #   group_by(class) |>
-      #   group_split() |>
-      #   lapply(function(x) as.matrix(x[,-1]))
-      #
-      # proj_list <- data_list_fn(train[[i]][,-1], train)
-
-      idx <- sample(1:nrow(ProjectedData), nrow(ProjectedData), replace = TRUE)
-      dim_order.fit(ProjectedData[idx, ], grouping[idx], method, ...)
-      # do.call(
-      #   cbind,
-      #   lapply(1:ncol(train[,-1]), function(r){
-      #     abs(t.test(proj_list[[1]][,r], proj_list[[2]][,r],
-      #                alternative = "two.sided",
-      #                var.equal = FALSE)$statistic)
-      #   })
-      # )
-    }) |>
-      do.call(rbind, args = _) |>
-      colMeans()
 
   } else {
   crit <- dim_order.fit(ProjectedData, grouping, method, ...)
@@ -142,11 +135,17 @@ dim_order <- function(x, grouping, ProjectionMatrix, method = "t",
     dcr <- TRUE
   }
   topdims <- sort(crit, decreasing = dcr, index.return = TRUE)
-
-  list("dims" = topdims$ix[1:ndims],
-       "dim_criteria" = crit[1:ndims],
-       "ProjectionMatrix" = ProjectionMatrix[,topdims$ix],
-       "ProjectedData" = ProjectedData[,topdims$ix])
+  dims <- topdims$ix[1:ndims]
+  out <- list("dims" = dims,
+       "dim_criteria" = crit[dims],
+       "ProjectionMatrix" = as.matrix(ProjectionMatrix[,dims]),
+       "ProjectedData" = as.matrix(ProjectedData[,dims]))
+  if(!is.null(nboot)){
+    colnames(boot_crits) <- paste0("dim", 1:ndims)
+    out$boot_crits <- boot_crits
+  }
+  ## Return
+  out
 }
 
 dim_order.fit <- function(ProjectedData, grouping, method, ...){
@@ -162,9 +161,9 @@ dim_order.fit <- function(ProjectedData, grouping, method, ...){
   }
   if(method == "qdap"){
     proj_list <- data_list_fn(ProjectedData, grouping)
-    if(is.null(prior)) prior <- as.vector(table(grouping))/length(grouping)
+    # priors <- priors_fn(data_list = proj_list)
     crit <- sapply(1:ncol(ProjectedData), function(r){
-      qdap(proj_list[[1]][,r], proj_list[[2]][,r], prior)
+      qdap(proj_list[[1]][,r], proj_list[[2]][,r], ...)
     })
     # topdims <- sort(crit, decreasing = FALSE, index.return = TRUE)
   }
