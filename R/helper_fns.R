@@ -19,9 +19,14 @@ S_B <- function(prior, xbar){
 
 mat_power <-  function(x, power) {
   x <-  (x + t(x)) / 2
-  with(
-    eigen(x), vectors %*% diag(values^power) %*% t(vectors))
-
+  # with(corpcor::fast.svd(x),{
+  #   d <- ifelse(sapply(d, function(x) is.zero(zapsmall(x))), 0, d^power)
+  #   u %*% diag(d) %*% t(v)
+  # })
+  with(eigen(x),{
+    values <- ifelse(sapply(values, function(y) is.zero(zapsmall(y))), 0, values^power)
+    vectors %*% diag(values) %*% t(vectors)
+  })
 }
 
 data_list_fn <- function(x, grouping){

@@ -1,6 +1,7 @@
 sdr <- function(x, y, method = "sdrs", ytype = "guess", nslices = 5, ndims = NULL, dims = NULL, dim.order = NULL, cv.folds = NULL, ...){
 
   if(!is.matrix(x)) x <- as.matrix(x)
+  if(!is.numeric(x)) x <- apply(x, 2, as.numeric)
 
   if (!is.null(colnames(x))) {
     var_names <- colnames(x)
@@ -18,7 +19,7 @@ sdr <- function(x, y, method = "sdrs", ytype = "guess", nslices = 5, ndims = NUL
 
   # Automatic guessing if ytype is "guess"
   if (ytype == "guess") {
-    if (is.factor(y) || is.character(y) || (length(unique(y)) / length(y) > 0.05)) {
+    if (is.factor(y) || is.character(y) || all(table(y)/length(y) > 0.10)) {
       ytype <- "categorical"
     } else {
       ytype <- "continuous"
@@ -45,11 +46,10 @@ sdr <- function(x, y, method = "sdrs", ytype = "guess", nslices = 5, ndims = NUL
 
 
   out <- sdr.fit(method, x = x, y = y, ytype = ytype, dims = dims, ...)
-  class(out) <- c("sdr")
   out$call <- match.call()
-  out$x <- x
-  out$y <- y
-  out$ytype <- ytype
+  # out$x <- x
+  # out$y <- y
+  # out$ytype <- ytype
   out$method <- method
   out$dims <- dims
   # out$ProjectionMatrix <- as.matrix(out$ProjectionMatrix[,dims])
@@ -74,30 +74,37 @@ sdr <- function(x, y, method = "sdrs", ytype = "guess", nslices = 5, ndims = NUL
   #   out$ProjectedData <- out$ProjectedData[,dims]
   # }
 
-  # if(!is.null(cv.folds)){
-  #   df <- cbind("class" = slices, as.data.frame(x))
-  #   splits <- rsample::vfold_cv(df, strata = class, v = cv.folds)$splits
-  #   train <- lapply(splits, rsample::training)
-  #   test <- lapply(splits, rsample::testing)
-  #   cv.errs <- matrix(nrow = cv.folds, ncol = length(out$dims))
-  #   for(i in 1:cv.folds){
+  if(!is.null(cv.folds)){
+    df <- cbind("y" = y, as.data.frame(x))
+    strata <- NULL
+    if(ytype == "categorical") strata <- y
+    splits <- rsample::vfold_cv(df, strata = strata, v = cv.folds)$splits
+    train <- lapply(splits, rsample::training)
+    test <- lapply(splits, rsample::testing)
+    cv.errs <- matrix(nrow = cv.folds, ncol = length(out$dims))
+    for(i in 1:cv.folds){
+      fit <- sdr.fit(method, x = as.matrix(train[[i]][,-1]), y = train[[i]]$y, ytype = ytype, dims = out$dims, ...)
   #     fit <- sdr.fit(x = as.matrix(train[[i]][,-1]), slices = train[[i]]$class, method = method, dims = out$dims, dim.order = NULL, lam = out$lam, ...)
-  #     cv.errs[i,] <- sapply(1:length(out$dims), function(j){
-  #       pred <- predict(fit, newdata = test[[i]][,-1], dims = out$dims[1:j], ...)$class
-  #       mean(pred != test[[i]]$class)
-  #     })
-  #   }
-  #   mean_errs <- colMeans(cv.errs)
-  #   min_dims <- which(mean_errs == min(mean_errs))
-  #   if(length(min_dims) > 1){
-  #     min_sd <- which.min(apply(cv.errs[,min_dims], 2, sd))
-  #     min_dims <- min_dims[min_sd]
-  #   }
-  #   out$dims <- out$dims[1:min_dims]
-  #   out$ProjectionMatrix <- out$ProjectionMatrix[,1:min_dims]
-  #   out$ProjectedData <- as.matrix(out$ProjectedData[,1:min_dims])
-  #   out$cv.errs <- mean_errs
-  # }
+      cv.errs[i,] <- sapply(1:length(out$dims), function(r){
+        pred <- predict(fit, newdata = test[[i]][,-1], ndims = r, ...)
+        if(ytype == "categorical") {
+          mean(pred[[1]] != test[[i]]$y)
+        } else {
+          Metrics::rmse(test[[i]]$y, pred[[1]])
+        }
+      })
+    }
+    mean_errs <- colMeans(cv.errs)
+    min_ndims <- which(mean_errs == min(mean_errs))
+    if(length(min_ndims) > 1){
+      min_sd <- which.min(apply(cv.errs[,min_ndims], 2, sd))
+      min_ndims <- min_ndims[min_sd]
+    }
+    out$dims <- out$dims[1:min_ndims]
+    out$ProjectionMatrix <- out$ProjectionMatrix[,1:min_ndims]
+    out$ProjectedData <- as.matrix(out$ProjectedData[,1:min_ndims])
+    out$cv.errs <- mean_errs
+  }
 
   ## Return
   if (!is.null(var_names)) {

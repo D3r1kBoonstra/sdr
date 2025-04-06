@@ -1,4 +1,4 @@
-sdr.fit.pca <- function(object, x, dims, ...){
+sdr.fit.pca <- function(object, x, y, ytype, dims, ...){
 
   M <- S <- cov(x)
   N <- diag(ncol(M))
@@ -8,40 +8,16 @@ sdr.fit.pca <- function(object, x, dims, ...){
   beta <- as.matrix(with(eigs, vectors[,ncol(vectors):1])[,dims])
   eigvalues <- with(eigs, values[length(values):1])[dims]
   ## Return
-  list("ProjectedData" = x %*% beta, "ProjectionMatrix" = beta, "eigvalues" = eigvalues, "M" = M, "N" = N)
+  out <- list("ProjectedData" = x %*% beta,
+       "ProjectionMatrix" = beta,
+       "eigvalues" = eigvalues,
+       "M" = M, "N" = N,
+       "x" = x, "y" = y,
+       "ytype" = ytype
+       )
+  class(out) <- c("sdr")
+  out
 }
-
-sdr.fit.save <- function(object, x, y, ytype, dims, priors = NULL, ...){
-  if(ytype == "categorical"){
-    slices <- y
-  } else {
-    slices <- make_slices(y, ...)
-  }
-  p <- ncol(x)
-  N <- S_x <- cov(x)
-  S_inv_sqrt <- mat_power(S_x, -.5)
-  S_sqrt <- mat_power(S_x, .5)
-  z <- scale(x, center = TRUE, scale = FALSE) %*% S_inv_sqrt
-
-  data_list <- data_list_fn(z, slices)
-  if(is.null(priors)) priors <- priors_fn(data_list = data_list)
-
-  S_zy <- lapply(data_list, cov)
-  E <- lapply(seq_along(S_zy), function(i){
-    priors[[i]]* mat_power(diag(p) - S_zy[[i]], 2)
-  }) |>
-    Reduce(`+`, x = _)
-
-  M <- S_sqrt %*% E %*% S_sqrt
-
-  # beta <- S_inv_sqrt %*% eigen(S_inv_sqrt %*% M %*% S_inv_sqrt)$vectors
-  eigs <- geigen::geigen(M, N)
-  beta <- as.matrix(with(eigs, vectors[,ncol(vectors):1])[,dims])
-  eigvalues <- with(eigs, values[length(values):1])[dims]
-  ## Return
-  list("ProjectedData" = x %*% beta, "ProjectionMatrix" = beta, "eigvalues" = eigvalues, "M" = M, "N" = N, "slices" = slices)
-}
-
 
 sdr.fit.sir <- function(object, x, y, ytype, dims, priors = NULL, ...){
 
@@ -72,7 +48,15 @@ sdr.fit.sir <- function(object, x, y, ytype, dims, priors = NULL, ...){
   beta <- as.matrix(with(eigs, vectors[,ncol(vectors):1])[,dims])
   eigvalues <- with(eigs, values[length(values):1])[dims]
   ## Return
-  list("ProjectedData" = x %*% beta, "ProjectionMatrix" = beta, "eigvalues" = eigvalues, "M" = M, "N" = N, "slices" = slices)
+  out <- list("ProjectedData" = x %*% beta,
+              "ProjectionMatrix" = beta,
+              "eigvalues" = eigvalues,
+              "M" = M, "N" = N,
+              "x" = x, "y" = y,
+              "ytype" = ytype, "slices" = slices
+  )
+  class(out) <- c("sdr")
+  out
 }
 
 sdr.fit.save <- function(object, x, y, ytype, dims, priors = NULL, ...){
@@ -103,10 +87,18 @@ sdr.fit.save <- function(object, x, y, ytype, dims, priors = NULL, ...){
   beta <- as.matrix(with(eigs, vectors[,ncol(vectors):1])[,dims])
   eigvalues <- with(eigs, values[length(values):1])[dims]
   ## Return
-  list("ProjectedData" = x %*% beta, "ProjectionMatrix" = beta, "eigvalues" = eigvalues, "M" = M, "N" = N, "slices" = slices)
+  out <- list("ProjectedData" = x %*% beta,
+              "ProjectionMatrix" = beta,
+              "eigvalues" = eigvalues,
+              "M" = M, "N" = N,
+              "x" = x, "y" = y,
+              "ytype" = ytype, "slices" = slices
+  )
+  class(out) <- c("sdr")
+  out
 }
 
-sdr.fit.sir2 <- function(object, x, y, ytype, dims, priors = NULL, ...){
+sdr.fit.sir2 <- function(object, x, y, ytype, dims, priors = NULL, regularize = FALSE, lambda = NULL, ...){
   if(ytype == "categorical"){
     slices <- y
   } else {
@@ -136,6 +128,89 @@ sdr.fit.sir2 <- function(object, x, y, ytype, dims, priors = NULL, ...){
 
   M <- M_save - mat_power(M_sir, 2)
 
+  if(regularize){
+    if(is.null(lambda)) lambda <- 10e-6
+    if(length(lambda) == 1L){
+      N <- N + lambda*diag(ncol(N))
+    }
+  }
+
+  eigs <- geigen::geigen(M, N)
+  beta <- as.matrix(with(eigs, vectors[,ncol(vectors):1])[,dims])
+  eigvalues <- with(eigs, values[length(values):1])[dims]
+  ## Return
+  out <- list("ProjectedData" = x %*% beta,
+              "ProjectionMatrix" = beta,
+              "eigvalues" = eigvalues,
+              "M" = M, "N" = N,
+              "x" = x, "y" = y,
+              "ytype" = ytype, "slices" = slices
+  )
+  class(out) <- c("sdr")
+  out
+}
+
+
+sdr.fit.rsir <- function(object, x, y, ytype, dims, priors = NULL, lambda = 10e-6, ...){
+  if(ytype == "categorical"){
+    slices <- y
+  } else {
+    slices <- make_slices(y, ...)
+  }
+
+
+  data_list <- data_list_fn(x, slices)
+  if(is.null(priors)) priors <- priors_fn(data_list = data_list)
+
+  xbarbar <- as.matrix(colMeans(x))
+  xbar <- lapply(data_list, function(x) as.matrix(colMeans(x)))
+  M <- lapply(seq_along(xbar), function(i){
+    diff <- xbar[[i]] - xbarbar
+    priors[[i]] * diff %*% t(diff)
+  }) |>
+    Reduce(`+`, x = _)
+
+  S <- cov(x)
+  p <- ncol(S)
+  if(length(lambda) == 1){
+    N <- S + lambda*diag(p)
+    eigs <- geigen::geigen(M, N)
+  }
+
+  beta <- as.matrix(with(eigs, vectors[,ncol(vectors):1])[,dims])
+  eigvalues <- with(eigs, values[length(values):1])[dims]
+  ## Return
+  list("ProjectedData" = x %*% beta, "ProjectionMatrix" = beta, "eigvalues" = eigvalues, "M" = M, "N" = N, "slices" = slices)
+}
+
+sdr.fit.rsave <- function(object, x, y, ytype, dims, priors = NULL, lambda = 10e-6, ...){
+  if(ytype == "categorical"){
+    slices <- y
+  } else {
+    slices <- make_slices(y, ...)
+  }
+  p <- ncol(x)
+  S_x <- cov(x)
+  S_inv_sqrt <- mat_power(S_x, -.5)
+  S_sqrt <- mat_power(S_x, .5)
+  z <- scale(x, center = TRUE, scale = FALSE) %*% S_inv_sqrt
+
+  data_list <- data_list_fn(z, slices)
+  if(is.null(priors)) priors <- priors_fn(data_list = data_list)
+
+  S_zy <- lapply(data_list, cov)
+  E <- lapply(seq_along(S_zy), function(i){
+    priors[[i]]* mat_power(diag(p) - S_zy[[i]], 2)
+  }) |>
+    Reduce(`+`, x = _)
+  M <- S_sqrt %*% E %*% S_sqrt
+
+  if(length(lambda) == 1){
+    N <- S_x + lambda*diag(p)
+    eigs <- geigen::geigen(M, N)
+  }
+
+  # beta <- S_inv_sqrt %*% eigen(S_inv_sqrt %*% M %*% S_inv_sqrt)$vectors
   eigs <- geigen::geigen(M, N)
   beta <- as.matrix(with(eigs, vectors[,ncol(vectors):1])[,dims])
   eigvalues <- with(eigs, values[length(values):1])[dims]
@@ -180,8 +255,15 @@ sdr.fit.dr <- function(object, x, y, ytype, dims, priors = NULL, ...){
   beta <- as.matrix(with(eigs, vectors[,ncol(vectors):1])[,dims])
   eigvalues <- with(eigs, values[length(values):1])[dims]
   ## Return
-  list("ProjectedData" = x %*% beta, "ProjectionMatrix" = beta, "eigvalues" = eigvalues, "M" = M, "N" = N, "slices" = slices)
-
+  out <- list("ProjectedData" = x %*% beta,
+              "ProjectionMatrix" = beta,
+              "eigvalues" = eigvalues,
+              "M" = M, "N" = N,
+              "x" = x, "y" = y,
+              "ytype" = ytype, "slices" = slices
+  )
+  class(out) <- c("sdr")
+  out
 }
 
 sdr.fit.sdrs <- function(object, x, y, ytype, dims, priors = NULL, prec.est = "glasso", ...){
@@ -261,6 +343,8 @@ sdr.fit.sdrs <- function(object, x, y, ytype, dims, priors = NULL, prec.est = "g
     # S <- lapply(glasso_out, function(x) x$Sigma)
     S_inv <- lapply(glasso_out, function(x) x$Omega)
     lam <- sapply(glasso_out, function(x) x$Tuning[[2]])
+  } else if(prec.est == "pseudo"){
+    S_inv <- lapply(S, MASS::ginv)
   }
 
   projectedMeanDiffs <- do.call(cbind,
@@ -281,8 +365,14 @@ sdr.fit.sdrs <- function(object, x, y, ytype, dims, priors = NULL, prec.est = "g
   #Return Projection Matrix
 
   ## Return
-  out <- list("ProjectedData" = x %*% beta, "ProjectionMatrix" = beta, "eigvalues" = eigvalues, "M" = M, "N" = diag(nrow(M)), "slices" = slices)
-  # out <- list("ProjectionMatrix" = M_svd$u, "eigvalues" = M_svd$d^2, "M" = M, "N" = diag(nrow(M)), "slices" = slices)
+  out <- list("ProjectedData" = x %*% beta,
+              "ProjectionMatrix" = beta,
+              "eigvalues" = eigvalues,
+              "M" = M, "N" = diag(ncol(M)),
+              "x" = x, "y" = y,
+              "ytype" = ytype, "slices" = slices
+  )
+  class(out) <- c("sdr")
 
   if(!is.null(prec.est)){
     if(prec.est == "SCPME" | prec.est == "glasso") out$lam <-  lam
@@ -415,6 +505,8 @@ sdr.fit.sdrs2 <- function(object, x, y, ytype, dims, priors = NULL, prec.est = "
   }
   out
 }
+
+
 sdr.fit.sdrs3 <- function(object, x, y, ytype, dims, priors = NULL, ...){
 
   if(ytype == "categorical"){
@@ -459,7 +551,7 @@ sdr.fit.sdrs3 <- function(object, x, y, ytype, dims, priors = NULL, ...){
                       S[[i]] - S[[1]]
                     }))
 
-  Sdiff_svd <- svd(Sdiffs)
+  Sdiff_svd <- corpcor::fast.svd(Sdiffs)
 
   top <- lik(Sdiff_svd$d^2)$max
 
@@ -479,10 +571,14 @@ sdr.fit.sdrs3 <- function(object, x, y, ytype, dims, priors = NULL, ...){
   eigvalues <- (M_svd$d^2)[dims]
   #Return Projection Matrix
 
-  ## Return
-  out <- list("ProjectedData" = x %*% beta, "ProjectionMatrix" = beta, "eigvalues" = eigvalues, "M" = M, "N" = diag(nrow(M)), "slices" = slices)
-  # out <- list("ProjectionMatrix" = M_svd$u, "eigvalues" = M_svd$d^2, "M" = M, "N" = diag(nrow(M)), "slices" = slices)
-
+  out <- list("ProjectedData" = x %*% beta,
+              "ProjectionMatrix" = beta,
+              "eigvalues" = eigvalues,
+              "M" = M, "N" = diag(ncol(M)),
+              "x" = x, "y" = y,
+              "ytype" = ytype, "slices" = slices
+  )
+  class(out) <- c("sdr")
   out
 }
 
@@ -504,8 +600,15 @@ sdr.fit.pfc <- function(object, x, y, ytype, dims, ...){
   eigs <- geigen::geigen(M, N)
   beta <- as.matrix(with(eigs, vectors[,ncol(vectors):1])[,dims])
   eigvalues <- with(eigs, values[length(values):1])[dims]
-  ## Return
-  list("ProjectedData" = x %*% beta, "ProjectionMatrix" = beta, "eigvalues" = eigvalues, "M" = M, "N" = N, "slices" = slices)
+  out <- list("ProjectedData" = x %*% beta,
+              "ProjectionMatrix" = beta,
+              "eigvalues" = eigvalues,
+              "M" = M, "N" = diag(ncol(M)),
+              "x" = x, "y" = y,
+              "ytype" = ytype, "slices" = slices
+  )
+  class(out) <- c("sdr")
+  out
 }
 
 sdr.fit.default <- function(method, ...) {
