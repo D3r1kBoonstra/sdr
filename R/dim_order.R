@@ -119,22 +119,35 @@ dim_order <- function(x, grouping, ProjectionMatrix, method = "t",
       boot_crits <- do.call(rbind, lapply(seq_len(nboot), function(i){
         n <- nrow(object$x)
         idx <- sample(1:n, n, replace = TRUE)
-        temp <- sdr.fit(object$method, object$x, object$y, object$ytype, object$dims, ...)
-        dim_order.fit(temp$ProjectedData[idx, ], temp$slices[idx], method, ...)
+        args <- c(
+          list(method = object$method, x = object$x[idx, ], y = object$y[idx],
+            ytype = object$ytype,
+            dims = object$dims
+          ),
+          object$extra_args
+        )
+        temp <- do.call(sdr.fit, args)
+        dim_order.fit(temp$ProjectedData, temp$slices, method, ...)
       }))
-      crit <- colMeans(boot_crits)
+      crit <- colMeans(boot_crits, na.rm = TRUE)
+    }
+    if (anyNA(boot_crits)) {
+      warning("NAs in boot_crits due to insufficient rank.")
     }
 
 
   } else {
   crit <- dim_order.fit(ProjectedData, grouping, method, ...)
+  if (anyNA(crit)) {
+    warning("NAs in dim_criteria due to insufficient rank.")
+  }
   }
   if(method == "qdap"){
     dcr <- FALSE
   } else {
     dcr <- TRUE
   }
-  topdims <- sort(crit, decreasing = dcr, index.return = TRUE)
+  topdims <- sort(crit, decreasing = dcr, index.return = TRUE, na.last = TRUE)
   dims <- topdims$ix[1:ndims]
   out <- list("dims" = dims,
        "dim_criteria" = crit[dims],

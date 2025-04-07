@@ -44,16 +44,12 @@ sdr <- function(x, y, method = "sdrs", ytype = "guess", nslices = 5, ndims = NUL
     }
   }
 
-
+  extra_args <- list(...)
   out <- sdr.fit(method, x = x, y = y, ytype = ytype, dims = dims, ...)
-  out$call <- match.call()
-  # out$x <- x
-  # out$y <- y
-  # out$ytype <- ytype
   out$method <- method
   out$dims <- dims
-  # out$ProjectionMatrix <- as.matrix(out$ProjectionMatrix[,dims])
-  # out$ProjectedData <- x %*% out$ProjectionMatrix
+  out$call <- match.call()
+  out$extra_args <- extra_args
 
 
   if(!is.null(dim.order)) {

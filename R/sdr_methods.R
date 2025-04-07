@@ -29,7 +29,7 @@ sdr.fit.sir <- function(object, x, y, ytype, dims, priors = NULL, ...){
 
 
   data_list <- data_list_fn(x, slices)
-  if(is.null(priors)) priors <- priors_fn(data_list = data_list)
+  if(is.null(priors)) priors <- table(slices)/length(slices)
 
   xbarbar <- as.matrix(colMeans(x))
   N <- S <- cov(x)
@@ -72,7 +72,7 @@ sdr.fit.save <- function(object, x, y, ytype, dims, priors = NULL, ...){
   z <- scale(x, center = TRUE, scale = FALSE) %*% S_inv_sqrt
 
   data_list <- data_list_fn(z, slices)
-  if(is.null(priors)) priors <- priors_fn(data_list = data_list)
+  if(is.null(priors)) priors <- table(slices)/length(slices)
 
   S_zy <- lapply(data_list, cov)
   E <- lapply(seq_along(S_zy), function(i){
@@ -111,7 +111,7 @@ sdr.fit.sir2 <- function(object, x, y, ytype, dims, priors = NULL, regularize = 
   z <- scale(x, center = TRUE, scale = FALSE) %*% S_inv_sqrt
 
   data_list <- data_list_fn(z, slices)
-  if(is.null(priors)) priors <- priors_fn(data_list = data_list)
+  if(is.null(priors)) priors <- priors <- table(slices)/length(slices)
 
   xbar <- lapply(data_list, function(x) as.matrix(colMeans(x)))
   M_sir <- lapply(seq_along(xbar), function(i){
@@ -232,7 +232,7 @@ sdr.fit.dr <- function(object, x, y, ytype, dims, priors = NULL, ...){
   z <- scale(x, center = TRUE, scale = FALSE) %*% S_inv_sqrt
 
   data_list <- data_list_fn(z, slices)
-  priors <- priors_fn(data_list = data_list)
+  priors <-  table(slices)/length(slices)
 
   S_zy <- lapply(data_list, cov)
   E_zy <- do.call(rbind, lapply(data_list, colMeans))
@@ -273,18 +273,15 @@ sdr.fit.sdrs <- function(object, x, y, ytype, dims, priors = NULL, prec.est = "g
     slices <- make_slices(y, ...)
   }
 
-  classes <- unique(slices)
-  data <- lapply(1:length(classes), function(i){
-    x[slices == classes[[i]], ]
-  })
+  data_list <- data_list_fn(x, slices)
+  if(is.null(priors)) priors <- table(slices)/length(slices)
 
-  n <- sapply(data, nrow)
+  n <- sapply(data_list, nrow)
   n_order <- order(n, decreasing = TRUE)
   n <- n[n_order]
-  prior <- lapply(seq_along(n), function(i) n[[i]]/sum(n))
-  data <- data[n_order]
-  S <- lapply(data, stats::cov)
-  xbar <- lapply(data, colMeans)
+  data <- data_list[n_order]
+  S <- lapply(data_list, stats::cov)
+  xbar <- lapply(data_list, function(x) as.matrix(colMeans(x)))
 
   # if(is.list(prec.est)) S_inv <- prec.est
 
@@ -515,22 +512,19 @@ sdr.fit.sdrs3 <- function(object, x, y, ytype, dims, priors = NULL, ...){
     slices <- make_slices(y, ...)
   }
 
-  classes <- unique(slices)
-  data <- lapply(1:length(classes), function(i){
-    x[slices == classes[[i]], ]
-  })
+  data_list <- data_list_fn(x, slices)
+  if(is.null(priors)) priors <- table(slices)/length(slices)
 
-  n <- sapply(data, nrow)
+  n <- sapply(data_list, nrow)
   n_order <- order(n, decreasing = TRUE)
   n <- n[n_order]
-  prior <- lapply(seq_along(n), function(i) n[[i]]/sum(n))
-  data <- data[n_order]
+  data <- data_list[n_order]
   S_x <- cov(x)
   S_inv_sqrt <- mat_power(S_x, power = -1/2)
-  S <- lapply(data, stats::cov)
+  S <- lapply(data_list, stats::cov)
 
   # S_common <- cov(x)
-  xbar <- lapply(data, function(x)as.matrix(colMeans(x)))
+  xbar <- lapply(data_list, function(x) as.matrix(colMeans(x)))
   xbarbar <- as.matrix(colMeans(x))
 
   # mean_diffs <- Reduce(`+`,
