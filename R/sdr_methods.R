@@ -1,5 +1,11 @@
 sdr.fit.pca <- function(object, x, y, ytype, dims, ...){
 
+  if(ytype == "categorical"){
+    slices <- y
+  } else {
+    slices <- make_slices(y, ...)
+  }
+
   M <- S <- cov(x)
   N <- diag(ncol(M))
 
@@ -9,12 +15,12 @@ sdr.fit.pca <- function(object, x, y, ytype, dims, ...){
   eigvalues <- with(eigs, values[length(values):1])[dims]
   ## Return
   out <- list("ProjectedData" = x %*% beta,
-       "ProjectionMatrix" = beta,
-       "eigvalues" = eigvalues,
-       "M" = M, "N" = N,
-       "x" = x, "y" = y,
-       "ytype" = ytype
-       )
+              "ProjectionMatrix" = beta,
+              "eigvalues" = eigvalues,
+              "M" = M, "N" = N,
+              "x" = x, "y" = y,
+              "ytype" = ytype, "slices" = slices
+  )
   class(out) <- c("sdr")
   out
 }
