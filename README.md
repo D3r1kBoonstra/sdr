@@ -5,7 +5,7 @@
 
 ## Overview
 
-`sdr` is an R package designed to implement multiple sufficient dimension reduction techniques for supervised classification. 
+`sdr` is an R package designed to implement multiple sufficient dimension reduction techniques. 
 
 ## Installation
 
